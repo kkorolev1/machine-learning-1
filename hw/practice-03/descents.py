@@ -122,7 +122,7 @@ class StochasticDescent(VanillaGradientDescent):
     def calc_gradient(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         # TODO: implement calculating gradient function
         indices = np.random.randint(x.shape[0], size=self.batch_size)
-        return super().calc_gradient(x[indices, :], y[indices])
+        return super().calc_gradient(x[indices], y[indices])
 
 
 class MomentumDescent(VanillaGradientDescent):

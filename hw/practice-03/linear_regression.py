@@ -37,7 +37,7 @@ class LinearRegression:
         for iter in range(self.max_iter):
             w_diff = self.descent.step(x, y)
             self.loss_history.append(self.calc_loss(x, y))
-            if np.linalg.norm(w_diff)**2 < self.tolerance:
+            if np.isnan(w_diff).any() or np.linalg.norm(w_diff)**2 < self.tolerance:
                 break
 
         return self
