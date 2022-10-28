@@ -75,7 +75,10 @@ class BaseDescent:
         :return: loss: float
         """
         # TODO: implement loss calculation function
-        return (y - x @ self.w).T @ (y - x @ self.w) / x.shape[0]
+        if self.loss_function is LossFunction.MSE:
+            return (y - x @ self.w).T @ (y - x @ self.w) / x.shape[0]
+        elif self.loss_function is LossFunction.LogCosh:
+            return np.log(np.cosh(self.predict(x) - y)).sum() / x.shape[0]
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         """
@@ -103,7 +106,10 @@ class VanillaGradientDescent(BaseDescent):
 
     def calc_gradient(self, x: np.ndarray, y: np.ndarray) -> np.ndarray:
         # TODO: implement calculating gradient function
-        return 2 / x.shape[0] * (x.T @ (x @ self.w) - x.T @ y)
+        if self.loss_function is LossFunction.MSE:
+            return 2 / x.shape[0] * (x.T @ (x @ self.w) - x.T @ y)
+        elif self.loss_function is LossFunction.LogCosh:
+            
 
 
 class StochasticDescent(VanillaGradientDescent):
@@ -198,7 +204,8 @@ class BaseDescentReg(BaseDescent):
         """
         Calculate gradient of loss function and L2 regularization with respect to weights
         """
-        l2_gradient: np.ndarray = np.zeros_like(x.shape[1])  # TODO: replace with L2 gradient calculation
+        self.w[-1] = 0
+        l2_gradient: np.ndarray = self.w  # TODO: replace with L2 gradient calculation
 
         return super().calc_gradient(x, y) + l2_gradient * self.mu
 
