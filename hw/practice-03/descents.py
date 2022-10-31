@@ -75,10 +75,19 @@ class BaseDescent:
         :return: loss: float
         """
         # TODO: implement loss calculation function
+
         if self.loss_function is LossFunction.MSE:
-            return (y - x @ self.w).T @ (y - x @ self.w) / x.shape[0]
+            y_pred = self.predict(x)
+            return (y - y_pred).T @ (y - y_pred) / x.shape[0]
         elif self.loss_function is LossFunction.LogCosh:
             return np.log(np.cosh(self.predict(x) - y)).sum() / x.shape[0]
+        elif self.loss_function is LossFunction.MAE:
+            return np.abs(y - self.predict(x)).sum() / x.shape[0]
+        elif self.loss_function is LossFunction.Huber:
+            residual = self.predict(x) - y
+            delta = 1
+            mask = np.abs(residual) <= delta
+            return (1. / (2*x.shape[0])) * (residual[mask]**2).sum() + (delta / x.shape[0]) * (np.abs(residual[~mask]) - delta / 2).sum()
 
     def predict(self, x: np.ndarray) -> np.ndarray:
         """
@@ -109,7 +118,14 @@ class VanillaGradientDescent(BaseDescent):
         if self.loss_function is LossFunction.MSE:
             return 2 / x.shape[0] * (x.T @ (x @ self.w) - x.T @ y)
         elif self.loss_function is LossFunction.LogCosh:
-            
+            return (1. / x.shape[0]) * x.T @ np.tanh(self.predict(x) - y)
+        elif self.loss_function is LossFunction.MAE:
+            return (1. / x.shape[0]) * x.T @ np.sign(self.predict(x) - y)
+        elif self.loss_function is LossFunction.Huber:
+            residual = self.predict(x) - y
+            delta = 1
+            mask = np.abs(residual) <= delta
+            return (1. / x.shape[0]) * x[mask].T @ residual[mask] + (delta / x.shape[0]) * x[~mask].T @ np.sign(residual[~mask])
 
 
 class StochasticDescent(VanillaGradientDescent):
@@ -187,6 +203,40 @@ class Adam(VanillaGradientDescent):
         return -w_diff
 
 
+class Adamax(VanillaGradientDescent):
+    """
+    Implements Adamax algorithm (a variant of Adam based on infinity norm).
+    """
+
+    def __init__(self, dimension: int, lambda_: float = 1e-3, loss_function: LossFunction = LossFunction.MSE):
+        super().__init__(dimension, lambda_, loss_function)
+        self.eps: float = 1e-8
+
+        self.m: np.ndarray = np.zeros(dimension)
+        self.u: np.ndarray = np.zeros(dimension)
+
+        self.beta_1: float = 0.9
+        self.beta_2: float = 0.999
+
+        self.iteration: int = 0
+
+    def update_weights(self, gradient: np.ndarray) -> np.ndarray:
+        """
+        :return: weight difference (w_{k + 1} - w_k): np.ndarray
+        """
+        # TODO: implement updating weights function
+        self.iteration += 1
+
+        self.m = self.beta_1 * self.m + (1 - self.beta_1) * gradient
+        self.u = np.maximum(self.beta_2 * self.u, np.abs(gradient) + self.eps)
+
+        m_hat = self.m / (1 - self.beta_1 ** self.iteration)
+
+        w_diff = self.lr() * m_hat / self.u
+        self.w -= w_diff
+        return -w_diff
+
+
 class BaseDescentReg(BaseDescent):
     """
     A base class with regularization
@@ -204,9 +254,8 @@ class BaseDescentReg(BaseDescent):
         """
         Calculate gradient of loss function and L2 regularization with respect to weights
         """
-        self.w[-1] = 0
         l2_gradient: np.ndarray = self.w  # TODO: replace with L2 gradient calculation
-
+        l2_gradient[-1] = 0
         return super().calc_gradient(x, y) + l2_gradient * self.mu
 
 
@@ -234,6 +283,12 @@ class AdamReg(BaseDescentReg, Adam):
     """
 
 
+class AdamaxReg(BaseDescentReg, Adamax):
+    """
+    Adamax with regularization class
+    """
+
+
 def get_descent(descent_config: dict) -> BaseDescent:
     descent_name = descent_config.get('descent_name', 'full')
     regularized = descent_config.get('regularized', False)
@@ -242,7 +297,8 @@ def get_descent(descent_config: dict) -> BaseDescent:
         'full': VanillaGradientDescent if not regularized else VanillaGradientDescentReg,
         'stochastic': StochasticDescent if not regularized else StochasticDescentReg,
         'momentum': MomentumDescent if not regularized else MomentumDescentReg,
-        'adam': Adam if not regularized else AdamReg
+        'adam': Adam if not regularized else AdamReg,
+        'adamax': Adamax if not regularized else AdamaxReg
     }
 
     if descent_name not in descent_mapping:
